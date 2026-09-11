@@ -1,0 +1,40 @@
+name: daily-digest
+
+on:
+  schedule:
+    # 00:00 UTC = 08:00 SGT. GitHub cron can drift 5-15 min under load.
+    - cron: '0 0 * * *'
+  workflow_dispatch:        # manual trigger button - essential while testing
+
+permissions:
+  contents: write           # needed to commit data/ back to the repo
+
+concurrency:
+  group: daily-digest
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # No pip install step - digest.py is stdlib only.
+
+      - name: Run digest
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python digest.py
+
+      - name: Commit results
+        run: |
+          git config user.name  "lawtech-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          # --quiet exits 1 when there ARE changes, so invert it
+          git diff --staged --quiet || git commit -m "digest: $(date -u +%Y-%m-%d)"
+          git push
