@@ -167,56 +167,47 @@ Return STRICT JSON, no markdown fence, with exactly these keys:
 
 
 def summarise(article: dict) -> dict:
-    """
-    Call an LLM for a summary. Degrades gracefully to the raw snippet
-    if no API key is set or the call fails - the widget must never break.
-    """
-    key = os.environ.get("ANTHROPIC_API_KEY")
+    key = os.environ.get("GEMINI_API_KEY")
     fallback = {
         "summary": (article["summary"] or article["title"])[:220],
         "why": "",
         "framework": "None",
     }
+
     if not key:
-        print("  i no ANTHROPIC_API_KEY - using raw snippet", file=sys.stderr)
         return fallback
 
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
+
     payload = {
-        "model": "claude-sonnet-4-6",
-        "max_tokens": 400,
-        "system": SYSTEM_PROMPT,
-        "messages": [{
-            "role": "user",
-            "content": USER_TEMPLATE.format(
+        "contents": [{
+            "parts": [{"text": USER_TEMPLATE.format(
                 title=article["title"],
                 source=article.get("source", "unknown"),
                 summary=article["summary"][:1500],
-            ),
-        }],
+            )}]
+        }]
     }
     req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
+        url,
         data=json.dumps(payload).encode(),
-        headers={
-            "content-type": "application/json",
-            "x-api-key": key,
-            "anthropic-version": "2023-06-01",
-        },
+        headers={"content-type": "application/json"},
         method="POST",
     )
     try:
         with urllib.request.urlopen(req, timeout=45) as r:
             body = json.loads(r.read())
-        text = body["content"][0]["text"].strip()
-        text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.M).strip()
+        text = body["candidates"][0]["content"]["parts"][0]["text"].strip()
+        text = re.sub(r"^(?:json)?|$", "", text, flags=re.M).strip()
         parsed = json.loads(text)
         return {
-            "summary":   parsed.get("summary", fallback["summary"]),
-            "why":       parsed.get("why", ""),
+            "summary": parsed.get("summary", fallback["summary"]),
+            "why": parsed.get("why", ""),
             "framework": parsed.get("framework", "None"),
         }
+
     except Exception as e:
-        print(f"  ! LLM call failed ({e}) - falling back", file=sys.stderr)
+        print(f" ! LLM call failed ({e}) - falling back", file=sys.stderr)
         return fallback
 
 
