@@ -1,4 +1,4 @@
-# lawtech-daily
+# lawtechdaily
 
 One law-tech / reg-tech / AI-governance article a day, summarised and delivered
 to my phone's home screen.
